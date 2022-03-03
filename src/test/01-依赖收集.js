@@ -16,9 +16,10 @@ const cleanup = (effectFn) => {
 /**
  *
  * @param {function} fn
+ * @param {Object} options 选项配置
  */
 // 注册副作用函数
-function effect(fn) {
+function effect(fn, options) {
   const effectFn = () => {
     // 清空以前的副作用函数
     cleanup(effectFn);
@@ -34,6 +35,8 @@ function effect(fn) {
     activeEffect = effectStack[effectStack.length - 1];
   }
   // 存放与该副作用函数相关联的副作用依赖集合
+  // 将副作用的相关配置保存
+  effectFn.options = options;
   effectFn.deps = [];
   effectFn();
 }
@@ -71,11 +74,19 @@ const trigger = (target, key) => {
   if (!depsMap) return;
   // 取出副作用函数的集合
   const effects = depsMap.get(key);
-  // 避免无限循环 将当前的依赖集合复制一份
-  const effectsToRun = new Set(effects);
-  effectsToRun && effectsToRun.forEach(fn => {
-    // 当前执行的副作用 和 正在执行的副作用函数相同时 不触发此副作用的执行
-    if (activeEffect !== fn) fn();
+  // 避免无限循环
+  const effectsToRun = new Set();
+  // 当前执行的副作用 和 正在执行的副作用函数相同时 不触发此副作用的执行
+  effects.forEach(fn => {
+    if (activeEffect !== fn) effectsToRun.add(fn);
+  })
+  effectsToRun.forEach(fn => {
+    // 存在调度器 则将副作用函数提供给用户
+    if (fn.options?.scheduler) {
+      fn.options.scheduler(fn);
+    } else {
+      fn();
+    }
   });
   // 存在则执行
   // effects && effects.forEach(fn => fn());
@@ -100,25 +111,57 @@ const obj = new Proxy(data, {
     return true;
   }
 })
-
-
-
+// 调度的副作用集合
+const jobQueue = new Set();
+let isFlushingQueue = false; // 是否正在刷新队列
+// 建立一个微任务实例
+const jobPromise = Promise.resolve();
+const flushJob = () => {
+  if (isFlushingQueue) return;// 队列正在刷新 什么都不做
+  // 设置队列正在刷新
+  isFlushingQueue = true;
+  jobPromise
+    .then(() => {
+      jobQueue.forEach(fn => fn());
+    })
+    .finally(() => isFlushingQueue = false);
+}
 // 测试
 // 嵌套收集依赖 模拟组件的嵌套
 function fn1() {
-  effect(fn2)
-  console.log(obj.name);
-}
-function fn2() {
-  obj.age += 1;
-  console.log(obj.age);
+  console.log(obj.age); // 想要让副作用执行结果不是同步的
 }
 
-effect(fn1)
 
-// setTimeout(() => {
-//   obj.name = "jun"
-// }, 1000)
-setTimeout(() => {
-  obj.age = 10;
-}, 2000)
+effect(fn1, {
+  // 调度器 是一个函数 参数是副作用函数
+  scheduler(effectFn) {
+    jobQueue.add(effectFn);
+    flushJob();
+  }
+});
+obj.age += 10;
+obj.age += 10;
+obj.age += 10; // 发现连续多次操作出发副作用 也只会执行一次副作用函数
+
+// function fn1() {
+//   console.log(obj.name); // 想要让副作用执行结果不是同步的
+// }
+// effect(fn1, {
+//   // 调度器 是一个函数 参数是副作用函数
+//   scheduler(effectFn) {
+//     setTimeout(effectFn, 1000);// 放到定时器中执行
+//   }
+// })
+
+// obj.name = "张三";
+console.log("-------end----------");
+
+// effect(()=>{
+//   effect(()=>{
+//     obj.age+=1;
+//     console.log(obj.age);
+//   })
+//   console.log(obj.age);
+// })
+// obj.age = 10;

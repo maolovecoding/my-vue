@@ -1,0 +1,22 @@
+{
+  "name": "my-mini-vue",
+  "version": "0.0.0",
+  "description": "阅读书籍vuejs的设计与实现，完成mini-vue的实现。",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maolovecoding/my-vue.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/maolovecoding/my-vue/issues"
+  },
+  "homepage": "https://github.com/maolovecoding/my-vue#readme",
+  "devDependencies": {
+    "vite": "^2.8.6"
+  }
+}
