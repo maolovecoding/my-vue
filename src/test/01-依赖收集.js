@@ -1,6 +1,6 @@
 // 存储注册的函数 方便收集
 let activeEffect = null;
-
+let effectStack = [];// 依赖收集函数的嵌套执行 记录每次的依赖函数
 // 收集副作用函数
 const bucket = new WeakMap();
 /**
@@ -24,8 +24,14 @@ function effect(fn) {
     cleanup(effectFn);
     // 当前激活的副作用函数 设置为此副作用函数
     activeEffect = effectFn;
+    // 在执行副作用函数之前 将当前副作用函数记录到栈中
+    effectStack.push(effectFn);
     // 执行实际的副作用函数
     fn();
+    // 弹出当前执行完的副作用依赖函数
+    effectStack.pop();
+    // 将注册的副作用函数恢复当前依赖执行前的 依赖
+    activeEffect = effectStack[effectStack.length - 1];
   }
   // 存放与该副作用函数相关联的副作用依赖集合
   effectFn.deps = [];
@@ -67,7 +73,10 @@ const trigger = (target, key) => {
   const effects = depsMap.get(key);
   // 避免无限循环 将当前的依赖集合复制一份
   const effectsToRun = new Set(effects);
-  effectsToRun && effectsToRun.forEach(fn => fn());
+  effectsToRun && effectsToRun.forEach(fn => {
+    // 当前执行的副作用 和 正在执行的副作用函数相同时 不触发此副作用的执行
+    if (activeEffect !== fn) fn();
+  });
   // 存在则执行
   // effects && effects.forEach(fn => fn());
 }
@@ -95,25 +104,21 @@ const obj = new Proxy(data, {
 
 
 // 测试
+// 嵌套收集依赖 模拟组件的嵌套
 function fn1() {
-  if(obj.age > 20)
-    console.log(obj.name);
-  else
-    console.log('ok');
-}
-function fn2(){
+  effect(fn2)
   console.log(obj.name);
 }
-function fn3(){
-  console.log(obj.name);
+function fn2() {
+  obj.age += 1;
+  console.log(obj.age);
 }
-effect(fn1)
-effect(fn2)
-effect(fn3)
 
+effect(fn1)
+
+// setTimeout(() => {
+//   obj.name = "jun"
+// }, 1000)
 setTimeout(() => {
-  obj.name = "jun"
-}, 1000)
-setTimeout(()=>{
   obj.age = 10;
-},2000)
+}, 2000)
